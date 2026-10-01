@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import type { Types } from 'mongoose';
-import { Types as MongooseTypes } from 'mongoose';
 import { z } from 'zod';
 import type { HydratedDocument } from 'mongoose';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -12,6 +11,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { BOOKING_ERRORS } from '../messages.js';
 import { assertAdminAudit, objectId } from '../services/authorization.js';
 import { assertBookable } from '../services/availability.js';
+import { linkClientToPhotographer } from '../services/relationship.js';
 import { advance } from '../services/timeline/engine.js';
 import { notify } from '../services/notifications/dispatcher.js';
 import { computeDeposit, toMinor, type DepositType } from '../utils/money.js';
@@ -175,6 +175,13 @@ router.post(
       link: `/dashboard/bookings/${String(booking._id)}`,
       bookingId: booking._id,
     });
+
+    /* The relationship starts with the request, not the approval: the client
+     * needs to be able to message the photographer to ask about dates and terms
+     * *while* the request is pending. `POST /chat/conversations` refuses any
+     * pair missing from `photographerIds`, so without this a booked client could
+     * not open a thread at all. */
+    await linkClientToPhotographer(booking.clientId, photographerId);
 
     return created(res, { booking }, 'Booking request sent.');
   }),

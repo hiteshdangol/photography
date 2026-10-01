@@ -2,16 +2,30 @@ import { useQuery } from '@tanstack/react-query';
 import { request } from '@/lib/api';
 import { Card, EmptyState, PageLoader } from '@/components/ui';
 
+/** Mirrors the payload of `GET /analytics/summary`. */
 interface DashboardSummary {
-  projects?: { total: number; active: number };
-  bookings?: { total: number; pending: number };
-  revenue?: { totalMinor: number };
+  range?: { from: string | null; to: string | null; days: number };
+  bookings?: {
+    total: number;
+    byStatus?: Record<string, number>;
+    bookedMinor: number;
+    conversion: number;
+  };
+  revenue?: {
+    receivedMinor: number;
+    transactions: number;
+    outstandingMinor: number;
+    outstandingInvoices: number;
+  };
+  projects?: number;
+  clients?: number;
 }
 
 export function DashboardPage() {
+  // `period=all` because this is a lifetime overview; the endpoint defaults to 30d.
   const { data, isPending, isError } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => request<DashboardSummary>({ url: '/analytics/overview' }),
+    queryFn: () => request<DashboardSummary>({ url: '/analytics/summary', params: { period: 'all' } }),
   });
 
   if (isPending) return <PageLoader />;
@@ -23,16 +37,20 @@ export function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-xs uppercase tracking-wide text-ink-400">Projects</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{data?.projects?.total ?? 0}</p>
+          <p className="mt-2 text-3xl font-semibold text-white">{data?.projects ?? 0}</p>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wide text-ink-400">Bookings</p>
           <p className="mt-2 text-3xl font-semibold text-white">{data?.bookings?.total ?? 0}</p>
+          <p className="mt-1 text-xs text-ink-400">{data?.bookings?.conversion ?? 0}% approved</p>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-wide text-ink-400">Revenue</p>
+          <p className="text-xs uppercase tracking-wide text-ink-400">Revenue received</p>
           <p className="mt-2 text-3xl font-semibold text-white">
-            {((data?.revenue?.totalMinor ?? 0) / 100).toLocaleString()}
+            {((data?.revenue?.receivedMinor ?? 0) / 100).toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-ink-400">
+            {(data?.revenue?.outstandingMinor ?? 0) / 100} outstanding
           </p>
         </Card>
       </div>

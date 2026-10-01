@@ -9,6 +9,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { objectId, tenantFilter } from '../services/authorization.js';
 import { paginated } from '../utils/pagination.js';
 import { notify } from '../services/notifications/dispatcher.js';
+import { linkClientToPhotographer } from '../services/relationship.js';
 
 const router = Router();
 
@@ -150,8 +151,16 @@ router.patch(
     const engagement = await BookingModel.findOne({ clientId, photographerId: req.ctx.tenantId }).select('_id');
     if (!engagement) throw ApiError.notFound('Client not found.');
 
+    // Match on `userId` alone. Filtering on `photographerIds` as well meant the
+    // upsert never matched a profile that had not yet been linked to this
+    // photographer, so it tried to insert and collided with the unique index on
+    // `userId`, returning 409 instead of saving the note.
+    const photographerId = req.ctx.tenantId;
+    if (!photographerId) throw ApiError.forbidden();
+    await linkClientToPhotographer(clientId, photographerId);
+
     const profile = await ClientProfileModel.findOneAndUpdate(
-      { userId: clientId, photographerIds: req.ctx.tenantId },
+      { userId: clientId },
       { $set: { 'preferences.notes': req.body.notes } },
       { new: true, upsert: true, setDefaultsOnInsert: true },
     );

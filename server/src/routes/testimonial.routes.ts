@@ -131,7 +131,11 @@ router.post(
       photographerId?: unknown;
       bookingId?: unknown;
     } | null = null;
-    let booking = null;
+    let booking: {
+      _id: Types.ObjectId;
+      eventType: string;
+      reviewedAt?: Date | null;
+    } | null;
     if (req.body.projectId) {
       project = await ProjectModel.findById(req.body.projectId)
         .select('_id photographerId clientId bookingId')

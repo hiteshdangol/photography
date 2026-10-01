@@ -277,7 +277,7 @@ export async function revokeAllSessions(userId: Types.ObjectId, reason: string):
   );
 }
 
-export async function requestPasswordReset(email: string, res: Response): Promise<{ token: string | null }> {
+export async function requestPasswordReset(email: string): Promise<{ token: string | null }> {
   const user = await UserModel.findOne({ email: email.toLowerCase() });
   // Always report success: whether an account exists must not be observable.
   if (!user) {

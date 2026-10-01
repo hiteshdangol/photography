@@ -33,7 +33,7 @@ export function renderInvoicePdf(invoice: Invoice): Promise<Buffer> {
     drawHeader(doc, invoice);
     drawParties(doc, invoice, currency);
     drawMeta(doc, invoice, money);
-    drawLines(doc, invoice, money);
+    drawLines(doc, invoice);
     drawTotals(doc, invoice, money);
 
     if (invoice.notes) {
@@ -87,7 +87,6 @@ function drawParties(doc: PDFKit.PDFDocument, invoice: Invoice, currency: string
   }
   if (invoice.snapshot.clientPhone) {
     doc.text(invoice.snapshot.clientPhone, doc.x, y, { width: columnWidth });
-    y = doc.y;
   }
 
   const rightX = 320;
@@ -125,7 +124,7 @@ function drawMeta(doc: PDFKit.PDFDocument, invoice: Invoice, money: (minor: numb
   doc.y = startY + rows.length * 16 + 12;
 }
 
-function drawLines(doc: PDFKit.PDFDocument, invoice: Invoice, money: (minor: number) => string): void {
+function drawLines(doc: PDFKit.PDFDocument, invoice: Invoice): void {
   const columns = { description: 60, qty: 300, unit: 360, total: 430 };
 
   drawRule(doc, LINE);

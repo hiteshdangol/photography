@@ -98,11 +98,11 @@ router.get(
       BookingModel.find({ photographerId: tenant, ...dateFilter }).select('status priceSnapshot eventDate createdAt').lean(),
       ProjectModel.countDocuments({ photographerId: tenant, ...dateFilter }),
       PaymentModel.aggregate([
-        { $match: { photographerId: tenant, status: 'completed', paidAt: { $gte: range.from ?? new Date(0), $lte: range.to } } },
+        { $match: { photographerId: tenant, status: 'completed', verifiedAt: { $gte: range.from ?? new Date(0), $lte: range.to } } },
         { $group: { _id: null, total: { $sum: '$amountMinor' }, count: { $sum: 1 } } },
       ]),
       PaymentModel.aggregate([
-        { $match: { photographerId: tenant, status: 'completed', paidAt: { $gte: range.from ?? new Date(0), $lte: range.to } } },
+        { $match: { photographerId: tenant, status: 'completed', verifiedAt: { $gte: range.from ?? new Date(0), $lte: range.to } } },
         { $group: { _id: '$currency', total: { $sum: '$amountMinor' } } },
       ]),
       InvoiceModel.aggregate([
@@ -157,15 +157,17 @@ router.get(
     const tenant = req.ctx.tenantId;
     if (!tenant) throw ApiError.forbidden('Analytics are available to photographer accounts only.');
 
+    /* Grouped on `verifiedAt`, not `paidAt`: Payment has no `paidAt` field, so
+     * matching and grouping on one silently produced zero revenue rows. */
     const groupId =
       filters.groupBy === 'day'
-        ? { $dateToString: { format: '%Y-%m-%d', date: '$paidAt' } }
+        ? { $dateToString: { format: '%Y-%m-%d', date: '$verifiedAt' } }
         : filters.groupBy === 'week'
-          ? { $dateToString: { format: '%G-W%V', date: '$paidAt' } }
-          : { $dateToString: { format: '%Y-%m', date: '$paidAt' } };
+          ? { $dateToString: { format: '%G-W%V', date: '$verifiedAt' } }
+          : { $dateToString: { format: '%Y-%m', date: '$verifiedAt' } };
 
     const rows = await PaymentModel.aggregate([
-      { $match: { photographerId: tenant, status: 'completed', paidAt: { $gte: range.from ?? new Date(0), $lte: range.to } } },
+      { $match: { photographerId: tenant, status: 'completed', verifiedAt: { $gte: range.from ?? new Date(0), $lte: range.to } } },
       {
         $group: {
           _id: groupId,

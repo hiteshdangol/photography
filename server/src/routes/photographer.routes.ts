@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { ok, created } from '../utils/response.js';
+import { ok } from '../utils/response.js';
 import {
   PackageModel,
   PhotographerProfileModel,
@@ -10,13 +10,12 @@ import {
   TestimonialModel,
   UserModel,
 } from '../models/index.js';
-import { authenticate, optionalAuthenticate, requirePhotographer } from '../middleware/auth.js';
+import { authenticate, requirePhotographer } from '../middleware/auth.js';
 import { validateBody, validateQuery, q } from '../middleware/validate.js';
 import { ApiError } from '../utils/ApiError.js';
 import { escapeRegex, slugify, uniqueSlug } from '../utils/slug.js';
 import { paginated } from '../utils/pagination.js';
 import { directoryLimiter } from '../middleware/rateLimit.js';
-import { objectId } from '../services/authorization.js';
 import { CATEGORY_KEYS } from '../config/categories.js';
 import { rangeAvailability } from '../services/availability.js';
 
@@ -303,7 +302,9 @@ router.patch(
       );
     }
 
-    const { businessName, ...rest } = req.body;
+    // `businessName` is excluded because it was already applied above, together
+    // with the slug it implies. Re-assigning it here would bypass that.
+    const { businessName: _businessName, ...rest } = req.body;
     Object.assign(profile, rest);
     await profile.save();
 

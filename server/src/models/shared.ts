@@ -1,4 +1,5 @@
-import { Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
+import type { Types } from 'mongoose';
 
 /** `YYYY-MM-DDTHH:mm` in the photographer's local timezone (no zone suffix). */
 export type LocalDateTimeString = string;

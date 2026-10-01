@@ -3,7 +3,13 @@ import { PAYMENT_PROVIDERS, PAYMENT_TYPES, TRANSACTION_STATUSES } from '../confi
 
 const refundSchema = new Schema(
   {
-    amountMinor: { type: Number, required: true, min: 0 },
+    /**
+     * Defaults to 0 rather than being `required` so the `not_requested` default
+     * below is itself a valid document. Requiring it would make every
+     * `PaymentModel.create` that omits `refund` fail validation, which is every
+     * ordinary payment.
+     */
+    amountMinor: { type: Number, required: true, min: 0, default: 0 },
     status: {
       type: String,
       enum: ['not_requested', 'requested', 'processing', 'completed', 'failed', 'cancelled'],

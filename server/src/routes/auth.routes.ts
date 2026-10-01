@@ -88,7 +88,7 @@ router.post(
   authLimiter,
   validateBody(forgotSchema),
   asyncHandler(async (req, res) => {
-    const { token } = await authService.requestPasswordReset(req.body.email, res);
+    const { token } = await authService.requestPasswordReset(req.body.email);
     const { emailTransport } = await import('../services/notifications/email.service.js');
     await emailTransport.sendPasswordReset(req.body.email, token);
     // The response never reveals whether the account exists.

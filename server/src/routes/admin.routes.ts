@@ -44,7 +44,6 @@ router.use(authenticate, requireSuperAdmin);
 router.get(
   '/overview',
   asyncHandler(async (_req, res) => {
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -69,7 +68,8 @@ router.get(
       ContactInquiryModel.countDocuments({}),
       ContactInquiryModel.countDocuments({ createdAt: { $gte: weekAgo } }),
       PaymentModel.aggregate([
-        { $match: { status: 'completed', paidAt: { $gte: monthAgo } } },
+        // `verifiedAt`, not `paidAt`: Payment has no `paidAt` field.
+        { $match: { status: 'completed', verifiedAt: { $gte: monthAgo } } },
         { $group: { _id: null, total: { $sum: '$amountMinor' }, count: { $sum: 1 } } },
       ]),
       PhotoModel.countDocuments({}),

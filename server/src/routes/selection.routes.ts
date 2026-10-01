@@ -9,7 +9,7 @@ import { validateBody, validateQuery, q } from '../middleware/validate.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ALBUM_ERRORS } from '../messages.js';
 import { assertAlbumAccess, objectId } from '../services/authorization.js';
-import { refreshAlbumCounts, refreshProjectCounts } from '../services/counts.js';
+import { refreshProjectCounts } from '../services/counts.js';
 import { advance } from '../services/timeline/engine.js';
 import { notify } from '../services/notifications/dispatcher.js';
 

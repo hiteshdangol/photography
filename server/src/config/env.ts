@@ -36,16 +36,6 @@ const int = (defaultValue: number, min = 0, max = Number.MAX_SAFE_INTEGER) =>
     .transform((v) => (v === undefined || v === '' ? defaultValue : Number(v)))
     .pipe(z.number().int().min(min).max(max));
 
-const csv = z
-  .string()
-  .optional()
-  .transform((v) =>
-    (v ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
-
 const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -92,11 +82,25 @@ const schema = z
     ALLOW_CLIENT_DOWNLOADS: bool(true),
     ALLOW_ORIGINAL_DOWNLOADS: bool(false),
     CRON_ENABLED: bool(true),
+    /**
+     * Whether the API process also runs the scheduler.
+     *
+     * Set to false when `npm run worker` is the only thing executing cron, so a
+     * horizontally scaled API does not run every job once per replica. The
+     * worker itself ignores this flag -- it exists to run the scheduler.
+     */
+    CRON_IN_API: bool(true),
     NOTIFICATION_RETENTION_DAYS: int(180, 1, 3650),
     MAX_PAGE_SIZE: int(100, 1, 500),
 
     SEED_PHOTOS_PER_PROJECT: int(48, 0, 2000),
     SEED_RANDOM_SEED: int(1337, 0, 2 ** 31),
+    /** Demo accounts written by `npm run seed`. Development only. */
+    SEED_ADMIN_EMAIL: z.string().default('admin@lensflow.test'),
+    SEED_ADMIN_PASSWORD: z.string().default('ChangeMe!Admin123'),
+    SEED_PHOTOGRAPHER_EMAIL: z.string().default('photographer@lensflow.test'),
+    SEED_CLIENT_EMAIL: z.string().default('client@lensflow.test'),
+    SEED_PASSWORD: z.string().default('ChangeMe!Client123'),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === 'production') {
@@ -147,7 +151,6 @@ if (!parsed.success) {
   const details = parsed.error.issues
     .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
     .join('\n');
-  // eslint-disable-next-line no-console
   console.error(
     `\nInvalid environment configuration:\n${details}\n\nCopy .env.example to .env and fill in the values.\n`,
   );

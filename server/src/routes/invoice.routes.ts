@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Types } from 'mongoose';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { ok, created, noContent } from '../utils/response.js';
+import { ok, created } from '../utils/response.js';
 import { BookingModel, InvoiceModel, PaymentModel, ProjectModel, UserModel } from '../models/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateBody, validateQuery, q } from '../middleware/validate.js';
@@ -289,6 +289,7 @@ const updateSchema = z.object({
 router.patch(
   '/:id',
   authenticate,
+  validateBody(updateSchema),
   asyncHandler(async (req, res) => {
     const invoice = await assertInvoiceAccess(req.params.id, req.ctx);
     if (req.ctx.role === 'client') throw ApiError.forbidden('Clients cannot edit an invoice.');

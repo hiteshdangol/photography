@@ -1,4 +1,4 @@
-import { z, type ZodError, type ZodType } from 'zod';
+import type { z, ZodError, ZodType } from 'zod';
 
 /** An error that is safe to show the user. Anything else becomes a generic 500. */
 export class ApiError extends Error {

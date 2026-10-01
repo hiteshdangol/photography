@@ -3,7 +3,7 @@ import type { Types } from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/response.js';
-import { BookingModel, InvoiceModel, PaymentModel, ProjectModel } from '../models/index.js';
+import { BookingModel, InvoiceModel, PaymentModel } from '../models/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateBody, validateQuery, q } from '../middleware/validate.js';
 import { ApiError } from '../utils/ApiError.js';

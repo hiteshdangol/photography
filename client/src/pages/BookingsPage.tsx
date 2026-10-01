@@ -3,29 +3,57 @@ import { request } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { Card, EmptyState, PageLoader } from '@/components/ui';
 
+/** A populated `clientId`, as returned for photographers; a bare id for clients. */
+type PopulatedClient = string | { _id: string; name?: string; email?: string } | null;
+
 interface BookingRow {
-  id: string;
-  clientName: string;
-  packageName: string;
+  /** `lean()` bypasses the schema's `virtuals: true`, so there is no `id`. */
+  _id: string;
+  reference: string;
+  eventType: string;
   eventDate: string | null;
+  startTime: string;
+  endTime: string;
+  location: string;
   status: string;
-  totalMinor: number;
+  paymentStatus: string;
+  clientId: PopulatedClient;
+  priceSnapshot?: {
+    packageName?: string;
+    totalMinor?: number;
+    currency?: string;
+  };
 }
 
 interface BookingsResponse {
   bookings: BookingRow[];
 }
 
+function clientName(clientId: PopulatedClient): string {
+  if (!clientId) return 'Client';
+  if (typeof clientId === 'string') return 'Client';
+  return clientId.name || clientId.email || 'Client';
+}
+
+function minorToAmount(value: number | undefined): string {
+  return ((value ?? 0) / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function BookingsPage() {
   const { user } = useAuth();
   const isClient = user?.role === 'client';
 
-  const { data, isPending } = useQuery({
+  // One endpoint for both roles: the server scopes the list by the verified role.
+  const { data, isPending, isError } = useQuery({
     queryKey: ['bookings', isClient],
-    queryFn: () => request<BookingsResponse>({ url: isClient ? '/bookings/mine' : '/bookings' }),
+    queryFn: () => request<BookingsResponse>({ url: '/bookings' }),
   });
 
   if (isPending) return <PageLoader />;
+  if (isError) return <EmptyState title="We could not load your bookings yet." hint="Try again in a moment." />;
 
   const rows = data?.bookings ?? [];
 
@@ -38,18 +66,23 @@ export function BookingsPage() {
         <EmptyState title="Nothing here yet" hint={isClient ? 'Your bookings will appear here.' : 'New requests will appear here.'} />
       ) : (
         <div className="space-y-3">
-          {rows.map((b) => (
-            <Card key={b.id} className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="font-medium text-white">{b.packageName}</p>
-                <p className="text-sm text-ink-400">{isClient ? b.packageName : b.clientName}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-white">{(b.totalMinor / 100).toLocaleString()}</p>
-                <p className="text-xs uppercase tracking-wide text-ink-400">{b.status}</p>
-              </div>
-            </Card>
-          ))}
+        {rows.map((b) => (
+          <Card key={b._id} className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-medium text-white">{b.priceSnapshot?.packageName || b.eventType}</p>
+              <p className="text-sm text-ink-400">{isClient ? b.reference : clientName(b.clientId)}</p>
+              {b.eventDate && (
+                <p className="text-xs text-ink-400">
+                  {new Date(b.eventDate).toLocaleDateString()} · {b.startTime}–{b.endTime}
+                </p>
+              )}
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-white">{minorToAmount(b.priceSnapshot?.totalMinor)}</p>
+              <p className="text-xs uppercase tracking-wide text-ink-400">{b.status}</p>
+            </div>
+          </Card>
+        ))}
         </div>
       )}
     </div>

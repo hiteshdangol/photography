@@ -33,7 +33,9 @@ router.post(
     if (req.body.website) {
       return ok(res, { received: true }, 'Thanks. We will be in touch.');
     }
-    const { website, ...data } = req.body;
+      // `website` is only destructured to keep it out of the persisted document;
+      // it is never read.
+      const { website: _honeypot, ...data } = req.body;
     const inquiry = await ContactInquiryModel.create({
       ...data,
       ip: req.ip ?? '',

@@ -1,4 +1,5 @@
-import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
+import axios from 'axios';
+import type { AxiosError, AxiosRequestConfig } from 'axios';
 import type { ApiEnvelope, ApiErrorBody, AuthResponse } from '@/types/api';
 
 const TOKEN_KEY = 'lensflow.accessToken';
