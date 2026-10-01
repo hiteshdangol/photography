@@ -21,8 +21,10 @@
     "lint": "npm run lint --workspace server && npm run lint --workspace client",
     "seed": "npm run seed --workspace server",
     "seed:reset": "npm run seed:reset --workspace server",
-    "test": "npm run test --workspace server",
-    "test:watch": "npm run test:watch --workspace server"
+    "test": "npm run test --workspace server && npm run test --workspace client",
+    "test:watch": "npm run test:watch --workspace server",
+    "test:client": "npm run test --workspace client",
+    "test:client:watch": "npm run test:watch --workspace client"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

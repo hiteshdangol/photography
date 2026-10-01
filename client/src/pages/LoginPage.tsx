@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button, Card, Input } from '@/components/ui';
 import { errorMessage } from '@/lib/api';
+import { homeFor } from '@/lib/roles';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -20,7 +21,7 @@ export function LoginPage() {
     try {
       const user = await login(email, password);
       const from = (location.state as { from?: string } | null)?.from;
-      navigate(from ?? (user.role === 'client' ? '/me' : '/dashboard'), { replace: true });
+      navigate(from ?? homeFor(user.role), { replace: true });
     } catch (err) {
       setError(errorMessage(err, 'Could not sign you in.'));
     } finally {

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { request } from '@/lib/api';
+import { minorToAmount } from '@/lib/format';
 import { useAuth } from '@/context/AuthContext';
 import { Card, EmptyState, PageLoader } from '@/components/ui';
 
@@ -33,13 +34,6 @@ function clientName(clientId: PopulatedClient): string {
   if (!clientId) return 'Client';
   if (typeof clientId === 'string') return 'Client';
   return clientId.name || clientId.email || 'Client';
-}
-
-function minorToAmount(value: number | undefined): string {
-  return ((value ?? 0) / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 export function BookingsPage() {

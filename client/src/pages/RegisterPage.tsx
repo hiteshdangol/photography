@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button, Card, Input } from '@/components/ui';
 import { errorMessage } from '@/lib/api';
+import { homeFor } from '@/lib/roles';
 import { cn } from '@/lib/cn';
 
 export function RegisterPage() {
@@ -29,7 +30,7 @@ export function RegisterPage() {
         phone: form.phone || undefined,
         role,
       });
-      navigate(user.role === 'photographer' ? '/dashboard' : '/me', { replace: true });
+      navigate(homeFor(user.role), { replace: true });
     } catch (err) {
       setError(errorMessage(err, 'Could not create your account.'));
     } finally {

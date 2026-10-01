@@ -5,6 +5,7 @@ import { Logo } from './Logo';
 import { Button } from './ui';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/cn';
+import { homeFor } from '@/lib/roles';
 
 const links = [
   { to: '/photographers', label: 'Photographers' },
@@ -39,7 +40,7 @@ export function SiteLayout() {
           <div className="hidden items-center gap-2 md:flex">
             {status === 'authenticated' && user ? (
               <Link
-                to={user.role === 'superadmin' ? '/admin' : user.role === 'photographer' ? '/dashboard' : '/me'}
+                to={homeFor(user.role)}
                 className="inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-800 px-4 text-sm text-white transition-colors hover:bg-ink-700"
               >
                 Dashboard
@@ -72,7 +73,7 @@ export function SiteLayout() {
                 </Link>
               ))}
               {status === 'authenticated' ? (
-                <Link to="/dashboard" onClick={() => setOpen(false)} className="py-2 text-white">
+                <Link to={user ? homeFor(user.role) : '/login'} onClick={() => setOpen(false)} className="py-2 text-white">
                   Dashboard
                 </Link>
               ) : (

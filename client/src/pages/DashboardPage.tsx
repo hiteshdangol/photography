@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { request } from '@/lib/api';
+import { minorToAmount } from '@/lib/format';
 import { Card, EmptyState, PageLoader } from '@/components/ui';
 
 /** Mirrors the payload of `GET /analytics/summary`. */
@@ -47,10 +48,10 @@ export function DashboardPage() {
         <Card>
           <p className="text-xs uppercase tracking-wide text-ink-400">Revenue received</p>
           <p className="mt-2 text-3xl font-semibold text-white">
-            {((data?.revenue?.receivedMinor ?? 0) / 100).toLocaleString()}
+            {minorToAmount(data?.revenue?.receivedMinor)}
           </p>
           <p className="mt-1 text-xs text-ink-400">
-            {(data?.revenue?.outstandingMinor ?? 0) / 100} outstanding
+            {minorToAmount(data?.revenue?.outstandingMinor)} outstanding
           </p>
         </Card>
       </div>

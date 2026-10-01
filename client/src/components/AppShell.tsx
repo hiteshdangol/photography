@@ -10,12 +10,14 @@ import {
   MessageSquare,
   Package,
   Receipt,
+  Shield,
   Sparkles,
   Users,
   Wallet,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { cn } from '@/lib/cn';
+import { isRootNavItem } from '@/lib/roles';
 import { useAuth } from '@/context/AuthContext';
 
 interface NavItem {
@@ -44,12 +46,20 @@ const clientNav: NavItem[] = [
   { to: '/me/billing', label: 'Billing', icon: Wallet },
 ];
 
+/* Superadmins reach `/admin`, which is gated to their role, so the previous
+ * "not a client means photographer" fallback would have rendered photographer
+ * links that immediately bounced them back here. */
+const adminNav: NavItem[] = [
+  { to: '/admin', label: 'Platform overview', icon: Shield },
+];
+
 export function AppShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const nav = user?.role === 'client' ? clientNav : photographerNav;
+  const nav =
+    user?.role === 'superadmin' ? adminNav : user?.role === 'client' ? clientNav : photographerNav;
 
   async function handleLogout() {
     await logout();
@@ -72,7 +82,7 @@ export function AppShell() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/dashboard' || item.to === '/me'}
+              end={isRootNavItem(item.to)}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 cn(

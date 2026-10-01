@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { SiteLayout } from '@/components/SiteLayout';
 import { AppShell } from '@/components/AppShell';
 import { PageLoader } from '@/components/ui';
+import { homeFor } from '@/lib/roles';
 import type { Role } from '@/types/api';
 
 import { HomePage } from '@/pages/HomePage';
@@ -16,6 +17,7 @@ import { BookingsPage } from '@/pages/BookingsPage';
 import { PackagesManagerPage } from '@/pages/PackagesManagerPage';
 import { ChatPage } from '@/pages/ChatPage';
 import { SectionPlaceholder } from '@/pages/SectionPlaceholder';
+import { AdminPage } from '@/pages/AdminPage';
 
 function RequireAuth({ roles }: { roles?: Role[] }) {
   const { status, user } = useAuth();
@@ -25,8 +27,11 @@ function RequireAuth({ roles }: { roles?: Role[] }) {
   if (status !== 'authenticated' || !user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
+  /* Send the user to their own home rather than a hardcoded role list: a
+   * superadmin used to be redirected to `/dashboard`, which is gated to
+   * photographers, so the guard rejected them again and looped. */
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'client' ? '/me' : '/dashboard'} replace />;
+    return <Navigate to={homeFor(user.role)} replace />;
   }
   return <Outlet />;
 }
@@ -58,6 +63,12 @@ export function App() {
           <Route path="invoices" element={<SectionPlaceholder title="Invoices" />} />
           <Route path="analytics" element={<SectionPlaceholder title="Analytics" />} />
           <Route path="wallet" element={<SectionPlaceholder title="Wallet" />} />
+        </Route>
+      </Route>
+
+      <Route element={<RequireAuth roles={['superadmin']} />}>
+        <Route path="/admin" element={<AppShell />}>
+          <Route index element={<AdminPage />} />
         </Route>
       </Route>
 
