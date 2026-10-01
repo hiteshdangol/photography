@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:all": "cross-env CRON_IN_API=false concurrently -n server,client,worker -c magenta,cyan,yellow \"npm:dev:server\" \"npm:dev:client\" \"npm:dev:worker\"",
     "dev:server": "npm run dev --workspace server",
     "dev:client": "npm run dev --workspace client",
     "dev:worker": "npm run dev:worker --workspace server",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",

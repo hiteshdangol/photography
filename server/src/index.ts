@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   if (env.CRON_ENABLED && env.CRON_IN_API && !env.isTest) {
     startCron();
   } else if (env.CRON_ENABLED && !env.isTest) {
-    log.info('CRON_IN_API is false; cron runs in the worker process (npm run worker)');
+    log.info('CRON_IN_API is false; cron runs in the worker process (npm run dev:worker)');
   }
 
   server.listen(env.PORT, () => {
