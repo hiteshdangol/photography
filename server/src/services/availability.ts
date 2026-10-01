@@ -70,6 +70,7 @@ async function blockedWindows(
 async function bookedWindows(
   photographerId: Types.ObjectId,
   date: Date,
+  ignoreBookingId?: string,
 ): Promise<{ start: string; end: string; bookingId: string }[]> {
   const dayStart = new Date(`${dateKey(date)}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -77,6 +78,11 @@ async function bookedWindows(
     photographerId,
     eventDate: { $gte: dayStart, $lt: dayEnd },
     status: { $in: ['pending', 'approved'] },
+    // The booking being re-validated (approve / reschedule) must not count as a
+    // conflict against itself.
+    ...(ignoreBookingId && Types.ObjectId.isValid(ignoreBookingId)
+      ? { _id: { $ne: new Types.ObjectId(ignoreBookingId) } }
+      : {}),
   })
     .select('_id startTime endTime')
     .lean();
@@ -119,6 +125,7 @@ function subtract(base: TimeRange[], blocks: TimeRange[]): TimeRange[] {
 export async function dayAvailability(
   photographerId: Types.ObjectId | string,
   date: Date,
+  options: { ignoreBookingId?: string } = {},
 ): Promise<DayAvailability> {
   const pid = new Types.ObjectId(String(photographerId));
   const key = dateKey(date);
@@ -140,7 +147,7 @@ export async function dayAvailability(
     return { date: key, available: false, windows: [], reason: 'blocked', conflicts: [] };
   }
 
-  const booked = await bookedWindows(pid, date);
+  const booked = await bookedWindows(pid, date, options.ignoreBookingId);
   let free = subtract(working, blocks.flatMap((b) => b.windows));
   free = subtract(free, booked.map((b) => ({ start: b.start, end: b.end })));
 
@@ -188,7 +195,11 @@ export async function assertSlotAvailable(
     return { available: false, reason: 'end_time_before_start' };
   }
 
-  const day = await dayAvailability(pid, eventDate);
+  // `ignoreBookingId` has to be applied *here*, before the window-fit test.
+  // `dayAvailability` subtracts booked ranges from the free windows, so without
+  // this the booking being approved removes its own slot and no longer fits in
+  // any window, making every approve fail with `outside_working_hours`.
+  const day = await dayAvailability(pid, eventDate, { ignoreBookingId: options.ignoreBookingId });
   if (!day.available) {
     return { available: false, reason: day.reason ?? 'unavailable' };
   }

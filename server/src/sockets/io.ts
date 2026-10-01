@@ -88,22 +88,26 @@ async function isParticipant(conversationId: string, userId: string): Promise<bo
 }
 
 export function createSocketServer(httpServer: HttpServer): TypedIoServer {
+  const options = {
+    path: '/socket.io',
+    cors: {
+      origin: env.corsOrigins,
+      credentials: true,
+    },
+    maxHttpBufferSize: 1e6, // messages are text only; no attachments by design
+    pingTimeout: 20000,
+  };
+
+  // Pass the HTTP server as the first positional argument. There is no
+  // `server` option key: `new IOServer({ server })` treats the whole object as
+  // the options bag and leaves the server unattached, so every handshake falls
+  // through to the Express 404 handler.
   const io: TypedIoServer = new IOServer<
     ClientToServerEvents,
     ServerToClientEvents,
     Record<string, never>,
     ServerData
-  >(
-    {
-      path: '/socket.io',
-      cors: {
-        origin: env.corsOrigins,
-        credentials: true,
-      },
-      maxHttpBufferSize: 1e6, // messages are text only; no attachments by design
-      pingTimeout: 20000,
-    },
-  );
+  >(httpServer, options);
 
   // --- connection auth ------------------------------------------------------
   io.use((socket, next) => {
