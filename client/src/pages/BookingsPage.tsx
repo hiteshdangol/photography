@@ -4,8 +4,11 @@ import { minorToAmount } from '@/lib/format';
 import { useAuth } from '@/context/AuthContext';
 import { Card, EmptyState, PageLoader } from '@/components/ui';
 
-/** A populated `clientId`, as returned for photographers; a bare id for clients. */
-type PopulatedClient = string | { _id: string; name?: string; email?: string } | null;
+/**
+ * A populated party reference, as returned by `/bookings`: a document for the
+ * side the caller can already see, or a bare id if the populate was skipped.
+ */
+type PopulatedParty = string | { _id: string; name?: string; avatar?: string } | null;
 
 interface BookingRow {
   /** `lean()` bypasses the schema's `virtuals: true`, so there is no `id`. */
@@ -18,11 +21,14 @@ interface BookingRow {
   location: string;
   status: string;
   paymentStatus: string;
-  clientId: PopulatedClient;
+  clientId: PopulatedParty;
+  /** Populated by the server since the booking-list fix; a bare id otherwise. */
+  photographerId: PopulatedParty;
   priceSnapshot?: {
     packageName?: string;
     totalMinor?: number;
     currency?: string;
+    depositMinor?: number;
   };
 }
 
@@ -30,10 +36,10 @@ interface BookingsResponse {
   bookings: BookingRow[];
 }
 
-function clientName(clientId: PopulatedClient): string {
-  if (!clientId) return 'Client';
-  if (typeof clientId === 'string') return 'Client';
-  return clientId.name || clientId.email || 'Client';
+function partyName(party: PopulatedParty, fallback: string): string {
+  if (!party) return fallback;
+  if (typeof party === 'string') return fallback;
+  return party.name?.trim() || fallback;
 }
 
 export function BookingsPage() {
@@ -47,7 +53,7 @@ export function BookingsPage() {
   });
 
   if (isPending) return <PageLoader />;
-  if (isError) return <EmptyState title="We could not load your bookings yet." hint="Try again in a moment." />;
+  if (isError) return <EmptyState title="We could not load your bookings yet." hint="Try again in a moment." />
 
   const rows = data?.bookings ?? [];
 
@@ -60,11 +66,28 @@ export function BookingsPage() {
         <EmptyState title="Nothing here yet" hint={isClient ? 'Your bookings will appear here.' : 'New requests will appear here.'} />
       ) : (
         <div className="space-y-3">
-        {rows.map((b) => (
+        {rows.map((b) => {
+          /* The package is the headline: a client asked for a specific package,
+           * and falling back to `eventType` alone lost what they booked. */
+          const packageName = b.priceSnapshot?.packageName?.trim();
+          return (
           <Card key={b._id} className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="font-medium text-white">{b.priceSnapshot?.packageName || b.eventType}</p>
-              <p className="text-sm text-ink-400">{isClient ? b.reference : clientName(b.clientId)}</p>
+            <div className="min-w-0">
+              <p className="font-medium text-white">{packageName || b.eventType}</p>
+              {/* Both parties, each labelled from the viewer's perspective: a
+               * client needs to know who is shooting, a photographer needs to know
+               * who booked. */}
+              <p className="text-sm text-ink-400">
+                {isClient
+                  ? partyName(b.photographerId, 'Your photographer')
+                  : partyName(b.clientId, 'Client')}
+                <span className="text-ink-600"> · </span>
+                <span className="text-ink-500">{b.reference}</span>
+              </p>
+              <p className="mt-1 text-xs text-ink-400">
+                {b.eventType}
+                {b.location ? ` · ${b.location}` : ''}
+              </p>
               {b.eventDate && (
                 <p className="text-xs text-ink-400">
                   {new Date(b.eventDate).toLocaleDateString()} · {b.startTime}–{b.endTime}
@@ -74,9 +97,15 @@ export function BookingsPage() {
             <div className="text-right">
               <p className="text-sm text-white">{minorToAmount(b.priceSnapshot?.totalMinor)}</p>
               <p className="text-xs uppercase tracking-wide text-ink-400">{b.status}</p>
+              {(b.priceSnapshot?.depositMinor ?? 0) > 0 && (
+                <p className="text-xs text-ink-500">
+                  {minorToAmount(b.priceSnapshot?.depositMinor)} deposit
+                </p>
+              )}
             </div>
           </Card>
-        ))}
+          );
+        })}
         </div>
       )}
     </div>

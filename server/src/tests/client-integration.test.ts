@@ -24,10 +24,11 @@ import {
  *     through to `GET /bookings/:id`, where `objectId('mine')` rejected it with
  *     400 "Invalid booking id". The role-scoped `GET /bookings` already covers
  *     both roles.
- *  3. The booking list only populates `clientId`, so the page has to read
- *     `clientId.name` and `priceSnapshot.totalMinor`; the top-level
- *     `clientName` / `packageName` / `totalMinor` it asked for do not exist,
- *     and `lean()` strips the schema's `id` virtual so `_id` is the only key.
+ *  3. The booking list now populates both `clientId` and `photographerId`, so the
+ *     page can read either party's name. It reads `priceSnapshot.totalMinor` and
+ *     `priceSnapshot.packageName`; the top-level `clientName` / `packageName` /
+ *     `totalMinor` it asked for do not exist, and `lean()` strips the schema's
+ *     `id` virtual so `_id` is the only key.
  *
  * Sessions are created per test: the shared `afterEach` truncates every
  * collection between tests, including users.
@@ -118,8 +119,33 @@ describe('client/server contract', () => {
     expect(row.status).toBeTruthy();
     expect(row).toHaveProperty('priceSnapshot');
     expect(row).toHaveProperty('clientId');
-    // The populated client object is what `clientName` reads from.
+    // The populated client object is what `partyName` reads from.
     expect(typeof row.clientId).toBe('object');
+    expect(row).toHaveProperty('photographerId');
+    /* Regression: the list populated only `clientId`, so a client received a bare
+     * `photographerId` ObjectId and the UI had to substitute the internal booking
+     * reference for the photographer's name. */
+    expect(typeof row.photographerId).toBe('object');
+  });
+
+  it('a client can read the photographer name and package they booked', async () => {
+    const { client } = await approveBooking(app);
+
+    const res = await api(app, client).get('/api/bookings').expect(200);
+    const rows = body<{
+      bookings: {
+        photographerId: { _id: string; name?: string };
+        priceSnapshot: { packageName?: string; totalMinor?: number };
+      }[];
+    }>(res).bookings;
+    expect(rows).toHaveLength(1);
+
+    const row = rows[0]!;
+    /* Both are what the client bookings page renders. A missing `name` here is
+     * exactly the bug where "photographer cannot be seen". */
+    expect(row.photographerId?.name).toBeTruthy();
+    expect(row.priceSnapshot).toBeDefined();
+    expect(typeof row.priceSnapshot.totalMinor).toBe('number');
   });
 
   it('unauthenticated booking requests are rejected', async () => {

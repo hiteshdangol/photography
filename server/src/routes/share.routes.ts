@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent } from '../utils/response.js';
-import { GalleryShareModel, ProjectModel } from '../models/index.js';
-import { authenticate, requirePhotographer } from '../middleware/auth.js';
+import { GalleryShareModel } from '../models/index.js';
+import { authenticate, optionalAuthenticate, requirePhotographer } from '../middleware/auth.js';
 import { validateBody, validateQuery, q } from '../middleware/validate.js';
 import { ApiError } from '../utils/ApiError.js';
 import { AUDIT_ERRORS, SHARE_ERRORS } from '../messages.js';
 import { assertProjectAccess, objectId } from '../services/authorization.js';
+import { inspectShare, openSharedGallery } from '../services/shares.js';
 import { randomToken, sha256 } from '../utils/crypto.js';
 import type { RequestContext } from '../types/express.js';
 
@@ -161,38 +162,36 @@ const resolveSchema = z.object({ token: z.string().min(20) });
 /**
  * Turn a token into the gallery the visitor may browse.
  *
- * The token is checked for liveness only. Whether the caller may *see* the
- * photos is decided by `optionalAuthenticate` plus the project membership check
- * below, so an intercepted link cannot be used to view someone else's gallery.
+ * A live token is what grants access here, which is the whole point of a share
+ * link: the person receiving it is frequently not the person who booked the
+ * shoot, so requiring project membership would make most links useless. That is
+ * also why every photo byte and metadata read re-checks the token server-side -
+ * `viewer.role` is a hint for the UI, never an authorisation.
+ *
+ * The response says who is looking, so the client can prompt for sign-in on the
+ * handful of actions that genuinely need an account (favouriting, downloads,
+ * messaging) instead of hiding them behind a wall.
  */
 router.get(
   '/resolve',
-  authenticate,
+  optionalAuthenticate,
   validateQuery(resolveSchema),
   asyncHandler(async (req, res) => {
     const { token } = q<z.infer<typeof resolveSchema>>(req);
-    const share = await findLiveShare(token);
-    if (!share) throw ApiError.forbidden(AUDIT_ERRORS.shareRevoked);
 
-    const project = await ProjectModel.findById(share.projectId)
-      .select('title slug status eventDate gallery photographerId clientId counts')
-      .lean();
+    // Validates, confirms the gallery is published, records one visit, and
+    // returns a grant so the visitor can keep browsing past the access limit.
+    const { project, share, viewToken } = await openSharedGallery(token, {
+      ip: req.ip,
+      userAgent: String(req.headers['user-agent'] ?? ''),
+    });
 
-    if (!project || !project.gallery?.published) {
-      throw ApiError.notFound(AUDIT_ERRORS.noGallery);
-    }
+    const userId = req.ctx ? String(req.ctx.userId) : null;
+    const isOwner = Boolean(userId) && String(share.photographerId) === userId;
+    const isClient = Boolean(userId) && project.clientId && String(project.clientId) === userId;
+    const isAdmin = req.ctx?.role === 'superadmin';
 
-    const isOwner = String(share.photographerId) === String(req.ctx.userId);
-    const isClient = project.clientId && String(project.clientId) === String(req.ctx.userId);
-    const isAdmin = req.ctx.role === 'superadmin';
-
-    if (!isOwner && !isClient && !isAdmin) {
-      throw ApiError.forbidden(AUDIT_ERRORS.notParticipant);
-    }
-
-    // An authenticated, permitted visit is the thing worth counting, so it is
-    // recorded here rather than on every rendition fetch.
-    await recordVisit(share, req);
+    const role = isOwner ? 'photographer' : isAdmin ? 'admin' : isClient ? 'client' : 'guest';
 
     return ok(res, {
       project: {
@@ -209,9 +208,15 @@ router.get(
         label: share.label,
         expiresAt: share.expiresAt,
         maxAccesses: share.maxAccesses,
-        accessCount: share.accessCount + 1,
+        accessCount: share.accessCount,
       },
-      viewer: { role: isOwner ? 'photographer' : isAdmin ? 'admin' : 'client' },
+      viewer: { role, signedIn: Boolean(req.ctx) },
+      /**
+       * Handed to the client and echoed back on photo reads. Without it a
+       * visitor whose link has no remaining accesses would be locked out of the
+       * gallery they are already looking at.
+       */
+      viewToken,
     });
   }),
 );
@@ -287,55 +292,6 @@ async function assertShareOwnership(id: string, ctx: RequestContext) {
   return share;
 }
 
-/**
- * Resolve a raw token to a share that is still usable, or `null`.
- *
- * Access limits and expiry are enforced on read, so a link that ran out of
- * accesses stops working immediately rather than at the next cron sweep.
- */
-async function inspectShare(token: string) {
-  const share = await GalleryShareModel.findOne({ tokenHash: sha256(token) });
-  if (!share || !share.active || share.revokedAt) {
-    return { share: null, reason: AUDIT_ERRORS.shareRevoked as string };
-  }
-  if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
-    return { share: null, reason: AUDIT_ERRORS.shareExpired as string };
-  }
-  if (share.maxAccesses > 0 && share.accessCount >= share.maxAccesses) {
-    return { share: null, reason: SHARE_ERRORS.limitReached as string };
-  }
-  return { share, reason: undefined };
-}
 
-async function findLiveShare(token: string) {
-  const { share, reason } = await inspectShare(token);
-  if (!share) throw ApiError.forbidden(reason ?? AUDIT_ERRORS.shareRevoked);
-  return share;
-}
-
-async function recordVisit(
-  share: { _id: unknown; accessCount: number; firstAccessedAt?: Date | null },
-  req: { ip?: string; headers: Record<string, unknown> },
-): Promise<void> {
-  await GalleryShareModel.updateOne(
-    { _id: share._id },
-    {
-      $inc: { accessCount: 1 },
-      $set: { lastAccessedAt: new Date(), ...(share.firstAccessedAt ? {} : { firstAccessedAt: new Date() }) },
-      $push: {
-        accessLog: {
-          $each: [
-            {
-              at: new Date(),
-              ip: req.ip ?? '',
-              userAgent: String(req.headers['user-agent'] ?? '').slice(0, 300),
-            },
-          ],
-          $slice: -200,
-        },
-      },
-    },
-  );
-}
 
 export default router;

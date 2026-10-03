@@ -4,19 +4,20 @@ import type { Request } from 'express';
 import type { Types } from 'mongoose';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created, noContent } from '../utils/response.js';
-import { AlbumModel, GalleryShareModel, PhotoModel, ProjectModel } from '../models/index.js';
+import { AlbumModel, PhotoModel, ProjectModel } from '../models/index.js';
 import { authenticate, requirePhotographer, optionalAuthenticate } from '../middleware/auth.js';
 import { validateBody, validateQuery, q } from '../middleware/validate.js';
 import { ApiError } from '../utils/ApiError.js';
 import { assertPhotoAccess, assertProjectAccess, objectId } from '../services/authorization.js';
+import { assertShareAccess, isLiveShareForProject } from '../services/shares.js';
+import { toPhotoDto } from '../services/photoDto.js';
 import { advance } from '../services/timeline/engine.js';
 import { multiImageUpload, runUpload } from '../middleware/upload.js';
 import { uploadLimiter } from '../middleware/rateLimit.js';
-import { UPLOAD_ERRORS } from '../messages.js';
+import { AUDIT_ERRORS, UPLOAD_ERRORS } from '../messages.js';
 import { PHOTO_CATEGORIES } from '../config/constants.js';
 import { getStorage } from '../services/storage/index.js';
 import { keyForVariant, processImage, safeFilename, type ImageVariant } from '../services/image/pipeline.js';
-import { sha256 } from '../utils/crypto.js';
 
 const router = Router();
 
@@ -33,22 +34,47 @@ const listSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
   limit: z.coerce.number().int().min(1).max(200).default(48),
+  /**
+   * A gallery share token. Only consulted when the request is not
+   * authenticated, which is what lets a shared gallery be listed as well as
+   * viewed. Ignored for signed-in callers - they use participant rules.
+   */
+  token: z.string().optional(),
+  /**
+   * Receipt for having opened the gallery. Carries no access of its own; it
+   * only keeps a visitor browsing after a link's access limit is spent.
+   */
+  viewToken: z.string().optional(),
 });
 
 /**
  * Photo list. Always scoped to a project the caller can reach - the projectId is
  * resolved through `assertProjectAccess` before any photo query runs, so there
  * is no path where an arbitrary photoId reveals bytes from another tenant.
+ *
+ * An unauthenticated visitor is allowed only with a live share token for that
+ * exact project, which is what makes a share link a browsable gallery rather
+ * than just a picture URL. Sign-in always wins: a signed-in caller's own
+ * participant rules apply and the token is ignored.
  */
 router.get(
   '/',
-  authenticate,
+  optionalAuthenticate,
   validateQuery(listSchema),
   asyncHandler(async (req, res) => {
     const filters = q<z.infer<typeof listSchema>>(req);
     if (!filters.projectId) throw ApiError.badRequest('A project is required.');
 
-    const project = await assertProjectAccess(filters.projectId, req.ctx, { adminAudit: readReason(req) });
+    const projectId = objectId(filters.projectId, 'project id');
+    const project = req.ctx
+      ? await assertProjectAccess(projectId, req.ctx, { adminAudit: readReason(req) })
+      : await assertShareAccess(filters.token, filters.viewToken);
+
+    // A share token is bound to one project, so it can never be replayed
+    // against another project's photos.
+    if (String(project._id) !== String(projectId)) {
+      throw ApiError.forbidden(AUDIT_ERRORS.shareRevoked);
+    }
 
     const filter: Record<string, unknown> = { projectId: project._id };
     if (filters.albumId) filter.albumId = objectId(filters.albumId, 'album id');
@@ -495,49 +521,7 @@ router.post(
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
-interface PhotoLike {
-  _id: unknown;
-  projectId: unknown;
-  category: string;
-  caption: string;
-  isHighlight: boolean;
-  highlightOrder: number;
-  width: number;
-  height: number;
-  aspectRatio: number;
-  blurDataUrl: string;
-  dominantColor: string;
-  allowDownload: boolean;
-  allowOriginalDownload: boolean;
-  uploadedAt: Date;
-}
 
-/**
- * The shape the gallery UI consumes. Storage keys are never exposed - only
- * authorised URLs through `/photos/:id/file`.
- */
-function toPhotoDto(photo: PhotoLike) {
-  const id = String(photo._id);
-  return {
-    id,
-    projectId: String(photo.projectId),
-    category: photo.category,
-    caption: photo.caption,
-    isHighlight: photo.isHighlight,
-    highlightOrder: photo.highlightOrder,
-    width: photo.width,
-    height: photo.height,
-    aspectRatio: photo.aspectRatio,
-    blurDataUrl: photo.blurDataUrl,
-    dominantColor: photo.dominantColor,
-    uploadedAt: photo.uploadedAt,
-    urls: {
-      thumbnail: `/api/photos/${id}/file?variant=thumbnail`,
-      gallery: `/api/photos/${id}/file?variant=gallery`,
-      original: `/api/photos/${id}/file?variant=original`,
-    },
-  };
-}
 
 /**
  * Download policy. A client asking for the original rendition needs both the
@@ -562,33 +546,14 @@ function narrowVariant(
 /**
  * A signed-out visitor needs a live share token *and* a published gallery. The
  * token alone is not access, and neither is publication alone.
+ *
+ * Only *validates* here. The visit is counted when the gallery is opened, not
+ * per image, so `maxAccesses` measures page views instead of image requests.
  */
 async function authorizeShareVisit(req: Request, projectId: Types.ObjectId): Promise<boolean> {
-  const token = typeof req.query.token === 'string' ? req.query.token : null;
-  if (!token || token.length < 20) return false;
-
-  const project = await ProjectModel.findById(projectId).select('gallery.published gallery.expiresAt').lean();
-  if (!project?.gallery?.published) return false;
-  if (project.gallery.expiresAt && project.gallery.expiresAt.getTime() < Date.now()) return false;
-
-  const share = await GalleryShareModel.findOne({
-    tokenHash: sha256(token),
-    projectId,
-    active: true,
-  });
-  if (!share) return false;
-  if (share.expiresAt && share.expiresAt.getTime() < Date.now()) return false;
-  if (share.maxAccesses > 0 && share.accessCount >= share.maxAccesses) return false;
-
-  share.accessCount += 1;
-  share.lastAccessedAt = new Date();
-  if (!share.firstAccessedAt) share.firstAccessedAt = new Date();
-  share.accessLog.push({ at: new Date(), ip: req.ip ?? '', userAgent: (req.headers['user-agent'] ?? '').slice(0, 300) });
-  // Keep the log bounded so a popular gallery cannot grow without limit.
-  if (share.accessLog.length > 200) share.accessLog.splice(0, share.accessLog.length - 200);
-  await share.save();
-
-  return true;
+  const token = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const grant = typeof req.query.viewToken === 'string' ? req.query.viewToken : undefined;
+  return isLiveShareForProject(projectId, token, grant);
 }
 
 function sanitiseOriginalName(name: string): string {

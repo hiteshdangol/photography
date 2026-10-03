@@ -4,19 +4,38 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Fraunces', ui-serif, Georgia, serif;
 
+  /*
+   * The ink scale is the dark shell. Tailwind v4 replaces the whole default
+   * namespace when `@theme` is declared, so every token a component asks for has
+   * to exist here: AdminPage was already reaching for `ink-500` and the `*-300`
+   * status tints, which silently rendered unstyled because they were missing.
+   */
   --color-ink-950: #0a0a0a;
   --color-ink-900: #111110;
   --color-ink-850: #17171a;
   --color-ink-800: #1e1e22;
   --color-ink-700: #2a2a30;
   --color-ink-600: #3a3a42;
+  --color-ink-500: #55555f;
   --color-ink-400: #8a8a95;
   --color-ink-300: #b4b4bd;
+  --color-ink-200: #d6d6dc;
+  --color-ink-100: #ececef;
+  --color-ink-50: #f5f5f6;
 
+  /* Amber is the accent: gold on black, per the art direction. */
+  --color-amber-200: #f8d79a;
+  --color-amber-300: #f5c76e;
   --color-amber-400: #f2b64c;
   --color-amber-500: #e19a2b;
+  --color-amber-600: #b87a1d;
 
+  --color-rose-300: #f08a8d;
+  --color-rose-400: #ec6a6e;
   --color-rose-500: #e5484d;
+
+  --color-emerald-300: #6fd07c;
+  --color-emerald-400: #4cc25e;
   --color-emerald-500: #3fb950;
 
   --radius-xl: 0.875rem;
@@ -92,4 +111,45 @@ body {
 
 @utility animate-fade-up {
   animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+ * Cinematic reveal for imagery: photos scale up a touch as they fade in, which
+ * reads as a camera settling rather than a slide animation.
+ */
+@keyframes image-reveal {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility animate-image-reveal {
+  animation: image-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Visible focus for keyboard users, suppressed for pointer interaction. */
+@utility focus-ring {
+  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+  }
+}
+
+/* Respect a stated preference for reduced motion across every reveal. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

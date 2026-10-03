@@ -20,10 +20,11 @@ import { mockRoutes, mockSession, resetState, type HarnessState } from './harnes
  * "the right page is on screen" is itself the assertion that the loop is gone.
  */
 const state = vi.hoisted<HarnessState>(() => ({
-  session: { role: 'photographer' },
-  routes: {},
-  urls: [],
-}));
+    session: { role: 'photographer' },
+    routes: {},
+    urls: [],
+    calls: [],
+  }));
 
 vi.mock('@/lib/api', async () => (await import('./harness')).createApiModule(() => state));
 vi.mock('@/lib/socket', async () => (await import('./harness')).createSocketModule());

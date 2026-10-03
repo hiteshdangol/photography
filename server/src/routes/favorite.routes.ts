@@ -9,6 +9,7 @@ import { validateBody, validateQuery, q } from '../middleware/validate.js';
 import { ApiError } from '../utils/ApiError.js';
 import { assertProjectAccess, objectId } from '../services/authorization.js';
 import { refreshPhotoCounts, refreshProjectCounts } from '../services/counts.js';
+import { toPhotoDto } from '../services/photoDto.js';
 
 const router = Router();
 
@@ -18,10 +19,14 @@ const listSchema = z.object({
 });
 
 /**
- * The client's favourites.
+ * The client's favourites, with each photo in full.
  *
  * Favouriting is a private, per-client thing: the photographer sees the *count* on
  * a photo but never which client liked it, so this list is client-only.
+ *
+ * The photo bodies are joined in rather than returned as bare ids, because the
+ * favourites screen renders the same grid as the gallery - asking the client to
+ * fan out one request per photo would turn one page load into two hundred.
  */
 router.get(
   '/',
@@ -39,19 +44,20 @@ router.get(
       .lean();
 
     const photoIds = favorites.map((f) => f.photoId);
-    const photos = await PhotoModel.find({ _id: { $in: photoIds } }).select('projectId isHighlight').lean();
-    const highlightByPhoto = new Set(
-      photos.filter((p) => p.isHighlight).map((p) => String(p._id)),
-    );
+    const photos = await PhotoModel.find({ _id: { $in: photoIds }, clientId: req.ctx.userId })
+      .sort({ sortOrder: 1, uploadedAt: 1 })
+      .lean();
+
+    // A favourite whose photo has since been deleted is dropped rather than
+    // returned as a dangling id the client cannot render.
+    const favoritedAt = new Map(favorites.map((f) => [String(f.photoId), f.createdAt]));
 
     return ok(res, {
-      favorites: favorites.map((f) => ({
-        photoId: String(f.photoId),
-        projectId: String(f.projectId),
-        isHighlight: highlightByPhoto.has(String(f.photoId)),
-        favoritedAt: f.createdAt,
+      favorites: photos.map((photo) => ({
+        ...toPhotoDto(photo),
+        favoritedAt: favoritedAt.get(String(photo._id)) ?? null,
       })),
-      count: favorites.length,
+      count: photos.length,
     });
   }),
 );

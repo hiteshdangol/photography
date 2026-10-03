@@ -231,7 +231,14 @@ router.get(
         .sort({ eventDate: 1 })
         .skip(pagination.skip)
         .limit(pagination.limit)
-        .populate('clientId', 'name email phone avatar')
+        /* Both parties are populated. Only `clientId` used to be, which meant a
+         * client listing their own bookings received a bare `photographerId`
+         * ObjectId with no way to resolve a name - so the UI could only show an
+         * internal reference in place of the photographer. The viewer is always
+         * one of these two accounts, so exposing the other party's name is not a
+         * cross-tenant disclosure. */
+        .populate('clientId', 'name avatar')
+        .populate('photographerId', 'name avatar')
         .lean(),
       BookingModel.countDocuments(filter),
       BookingModel.aggregate([
